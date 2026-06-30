@@ -38,6 +38,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
+      - name: Generate Gradle Wrapper
+        run: |
+          cd android
+          gradle wrapper --gradle-version 8.5
+
       - name: Build Android Release APK
         run: |
           cd android
