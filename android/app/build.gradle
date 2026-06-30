@@ -1,0 +1,35 @@
+apply plugin: "com.android.application"
+apply plugin: "org.jetbrains.kotlin.android"
+apply plugin: "com.facebook.react"
+
+android {
+    className = "com.keyseditor.MainActivity"
+    compileSdk = 34
+
+    namespace "com.keyseditor"
+    defaultConfig {
+        applicationId "com.keyseditor"
+        minSdk = 21
+        targetSdk = 34
+        versionCode 1
+        versionName "1.0"
+    }
+    signingConfigs {
+        debug {
+            storeFile file('debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }
+    buildTypes {
+        release {
+            signingConfig signingConfigs.debug
+            minifyEnabled false
+        }
+    }
+}
+
+dependencies {
+    implementation("com.facebook.react:react-android")
+}
