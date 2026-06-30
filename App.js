@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -17,40 +17,46 @@ import * as Sharing from 'expo-sharing';
 const translations = {
   ru: {
     title: "Редактор JSON и TXT",
-    btnOpen: "Открыть файл",
-    btnNewJson: "+ Новый JSON",
-    btnNewTxt: "+ Новый TXT",
+    btnOpen: "Открыть",
+    btnNewJson: "+ JSON",
+    btnNewTxt: "+ TXT",
     btnSave: "Сохранить",
+    btnSaveAs: "Сохранить как...",
     btnShare: "Поделиться",
     placeholder: "Текст файла отобразится здесь...",
+    searchPlaceholder: "Поиск текста...",
     statusEmpty: "Файл не выбран",
-    statusEditing: "Редактирование: ",
+    statusEditing: "Файл: ",
     alertSuccess: "Успешно",
     alertSaved: "Файл успешно сохранен!",
     alertError: "Ошибка",
     alertReadError: "Не удалось прочитать файл",
-    alertSaveError: "Не удалось сохранить файл",
+    alertSaveError: "Не удалось сохранить файл. Попробуйте 'Сохранить как...'",
     alertInvalidJson: "Внимание: Неверный формат JSON!",
     alertShareError: "Невозможно поделиться файлом",
+    searchNotFound: "Ничего не найдено",
     langBtn: "Укр"
   },
   uk: {
     title: "Редактор JSON та TXT",
-    btnOpen: "Відкрити файл",
-    btnNewJson: "+ Новий JSON",
-    btnNewTxt: "+ Новий TXT",
+    btnOpen: "Відкрити",
+    btnNewJson: "+ JSON",
+    btnNewTxt: "+ TXT",
     btnSave: "Зберегти",
+    btnSaveAs: "Зберегти як...",
     btnShare: "Поділитись",
     placeholder: "Текст файлу відобразиться тут...",
+    searchPlaceholder: "Пошук тексту...",
     statusEmpty: "Файл не обрано",
-    statusEditing: "Редагування: ",
+    statusEditing: "Файл: ",
     alertSuccess: "Успішно",
     alertSaved: "Файл успішно збережено!",
     alertError: "Помилка",
     alertReadError: "Не вдалося прочитати файл",
-    alertSaveError: "Не вдалося зберегти файл",
+    alertSaveError: "Не вдалося зберегти файл. Спробуйте 'Зберегти як...'",
     alertInvalidJson: "Увага: Невірний формат JSON!",
     alertShareError: "Неможливо поділитися файлом",
+    searchNotFound: "Нічого не знайдено",
     langBtn: "Рус"
   }
 };
@@ -60,22 +66,26 @@ export default function App() {
   const [fileContent, setFileContent] = useState('');
   const [fileUri, setFileUri] = useState(null);
   const [fileName, setFileName] = useState('');
-  const [fileType, setFileType] = useState(null); // 'json' или 'txt'
+  const [fileType, setFileType] = useState(null);
   const [loading, setLoading] = useState(false);
-
+  
+  // Поиск
+  const [searchQuery, setSearchQuery] = useState('');
+  
   const t = translations[lang];
+  const scrollViewRef = useRef(null);
 
   const toggleLang = () => {
     setLang(lang === 'ru' ? 'uk' : 'ru');
   };
 
-  // Открытие файла через системный проводник
+  // Открытие файла
   const handleOpenFile = async () => {
     setLoading(true);
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: ['text/plain', 'application/json', '*/*'],
-        copyToCacheDirectory: true
+        copyToCacheDirectory: false // Берем напрямую, чтобы сохранить права на исходник
       });
 
       if (!result.canceled && result.assets && result.assets[0]) {
@@ -94,7 +104,6 @@ export default function App() {
     }
   };
 
-  // Создание нового пустого файла JSON
   const handleCreateNewJson = () => {
     setFileContent('{\n  "key": "value"\n}');
     setFileName('new_file.json');
@@ -102,7 +111,6 @@ export default function App() {
     setFileUri(null);
   };
 
-  // Создание нового пустого файла TXT
   const handleCreateNewTxt = () => {
     setFileContent('');
     setFileName('new_file.txt');
@@ -110,33 +118,63 @@ export default function App() {
     setFileUri(null);
   };
 
-  // Сохранение изменений
-  const handleSaveFile = async () => {
-    // Если это JSON, базовая проверка синтаксиса перед сохранением
+  // Валидация JSON
+  const validateJson = () => {
     if (fileType === 'json') {
       try {
         JSON.parse(fileContent);
+        return true;
       } catch (e) {
         Alert.alert(t.alertError, t.alertInvalidJson);
-        return;
+        return false;
       }
     }
+    return true;
+  };
+
+  // ОБЫЧНОЕ СОХРАНЕНИЕ (В ИСХОДНИК)
+  const handleSaveFile = async () => {
+    if (!validateJson()) return;
 
     setLoading(true);
     try {
-      let targetUri = fileUri;
-      
-      // Если файл новый (еще не привязан к системе), создаем его в кэше Expo для возможности экспорта
-      if (!targetUri) {
-        targetUri = FileSystem.cacheDirectory + fileName;
+      if (fileUri) {
+        // Запись в оригинальный URI, полученный от системы
+        await FileSystem.writeAsStringAsync(fileUri, fileContent, {
+          encoding: FileSystem.EncodingType.UTF8
+        });
+        Alert.alert(t.alertSuccess, t.alertSaved);
+      } else {
+        // Если файл новый и структуры на диске еще нет — перенаправляем на "Сохранить как..."
+        handleSaveAsFile();
       }
+    } catch (error) {
+      // На Android SAF (Storage Access Framework) иногда блокирует перезапись напрямую,
+      // в таком случае выводим ошибку и предлагаем юзеру сохранить копию.
+      Alert.alert(t.alertError, t.alertSaveError);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      await FileSystem.writeAsStringAsync(targetUri, fileContent, {
+  // СОХРАНИТЬ КАК... (Экспорт через шеринг/проводник)
+  const handleSaveAsFile = async () => {
+    if (!validateJson()) return;
+
+    setLoading(true);
+    try {
+      // Пишем временный файл в кэш Expo
+      const tempUri = FileSystem.cacheDirectory + fileName;
+      await FileSystem.writeAsStringAsync(tempUri, fileContent, {
         encoding: FileSystem.EncodingType.UTF8
       });
 
-      setFileUri(targetUri);
-      Alert.alert(t.alertSuccess, t.alertSaved);
+      // Вызываем системный диалог, позволяющий сохранить файл в любую папку устройства
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(tempUri, { dialogTitle: t.btnSaveAs });
+      } else {
+        Alert.alert(t.alertError, t.alertShareError);
+      }
     } catch (error) {
       Alert.alert(t.alertError, t.alertSaveError);
     } finally {
@@ -144,26 +182,25 @@ export default function App() {
     }
   };
 
-  // Поделиться файлом (Share)
+  // Поделиться
   const handleShareFile = async () => {
     try {
-      let targetUri = fileUri;
-      
-      // Если файл редактировался, но физически не сохранен на диске, принудительно пишем его в кэш
-      if (!targetUri || !fileUri) {
-        targetUri = FileSystem.cacheDirectory + fileName;
-        await FileSystem.writeAsStringAsync(targetUri, fileContent);
-        setFileUri(targetUri);
-      }
-
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(targetUri);
-      } else {
-        Alert.alert(t.alertError, t.alertShareError);
-      }
+      const tempUri = FileSystem.cacheDirectory + fileName;
+      await FileSystem.writeAsStringAsync(tempUri, fileContent);
+      await Sharing.shareAsync(tempUri);
     } catch (error) {
       Alert.alert(t.alertError, t.alertShareError);
     }
+  };
+
+  // Быстрый скролл ВВЕРХ
+  const scrollToTop = () => {
+    scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+  };
+
+  // Быстрый скролл ВНИЗ
+  const scrollToBottom = () => {
+    scrollViewRef.current?.scrollToEnd({ animated: true });
   };
 
   return (
@@ -176,7 +213,7 @@ export default function App() {
         </TouchableOpacity>
       </View>
 
-      {/* Кнопки управления файлами */}
+      {/* Кнопки создания/открытия */}
       <View style={styles.topBar}>
         <TouchableOpacity style={styles.btnAction} onPress={handleOpenFile}>
           <Text style={styles.btnText}>{t.btnOpen}</Text>
@@ -189,31 +226,66 @@ export default function App() {
         </TouchableOpacity>
       </View>
 
-      {/* Статус-бар текущего файла */}
+      {/* Панель поиска */}
+      <View style={styles.searchBar}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder={t.searchPlaceholder}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+      </View>
+
+      {/* Статус-бар */}
       <View style={styles.statusContainer}>
         <Text style={styles.statusText} numberOfLines={1}>
           {fileName ? `${t.statusEditing}${fileName}` : t.statusEmpty}
         </Text>
       </View>
 
-      {/* Поле редактора */}
+      {/* Рабочая зона */}
       {loading ? (
         <View style={styles.loaderContainer}>
           <ActivityIndicator size="large" color="#0052CC" />
         </View>
       ) : (
-        <ScrollView style={styles.editorScroll} contentContainerStyle={{ flexGrow: 1 }}>
-          <TextInput
-            style={styles.editorInput}
-            multiline
-            textAlignVertical="top"
-            placeholder={t.placeholder}
-            value={fileContent}
-            onChangeText={setFileContent}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-        </ScrollView>
+        <View style={styles.editorWrapper}>
+          <ScrollView 
+            ref={scrollViewRef} 
+            style={styles.editorScroll} 
+            contentContainerStyle={{ flexGrow: 1 }}
+            removeClippedSubviews={true} // Оптимизация для тяжелых файлов
+          >
+            <TextInput
+              style={styles.editorInput}
+              multiline
+              textAlignVertical="top"
+              placeholder={t.placeholder}
+              value={fileContent}
+              onChangeText={setFileContent}
+              
+              // Отключаем всё лишнее, чтобы убрать лаги на 5000+ строках
+              autoCapitalize="none"
+              autoCorrect={false}
+              spellCheck={false}
+              autoComplete="off"
+            />
+          </ScrollView>
+
+          {/* Стрелки быстрой навигации (Плавающие справа) */}
+          {fileName ? (
+            <View style={styles.scrollNavigation}>
+              <TouchableOpacity style={styles.navArrow} onPress={scrollToTop}>
+                <Text style={styles.navArrowText}>▲</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.navArrow} onPress={scrollToBottom}>
+                <Text style={styles.navArrowText}>▼</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+        </View>
       )}
 
       {/* Нижние кнопки действий */}
@@ -225,6 +297,15 @@ export default function App() {
         >
           <Text style={styles.btnText}>{t.btnSave}</Text>
         </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={[styles.btnBottom, styles.btnSaveAsColor, !fileName && styles.btnDisabled]} 
+          onPress={handleSaveAsFile}
+          disabled={!fileName}
+        >
+          <Text style={styles.btnText}>{t.btnSaveAs}</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity 
           style={[styles.btnBottom, styles.btnShareColor, !fileName && styles.btnDisabled]} 
           onPress={handleShareFile}
@@ -254,20 +335,20 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E1E6EB'
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#1A1F26'
   },
   langButton: {
     backgroundColor: '#0052CC',
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 6
   },
   langButtonText: {
     color: '#FFF',
     fontWeight: '600',
-    fontSize: 14
+    fontSize: 13
   },
   topBar: {
     flexDirection: 'row',
@@ -279,7 +360,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0052CC',
     paddingVertical: 10,
-    marginHorizontal: 4,
+    marginHorizontal: 3,
     borderRadius: 6,
     alignItems: 'center'
   },
@@ -289,7 +370,22 @@ const styles = StyleSheet.create({
   btnText: {
     color: '#FFF',
     fontWeight: 'bold',
-    fontSize: 13
+    fontSize: 12,
+    textAlign: 'center'
+  },
+  searchBar: {
+    paddingHorizontal: 10,
+    paddingBottom: 10,
+    backgroundColor: '#FFF'
+  },
+  searchInput: {
+    backgroundColor: '#F0F2F5',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    fontSize: 14,
+    borderWidth: 1,
+    borderColor: '#E1E6EB'
   },
   statusContainer: {
     paddingHorizontal: 15,
@@ -301,20 +397,52 @@ const styles = StyleSheet.create({
     color: '#4A5568',
     fontWeight: '500'
   },
+  editorWrapper: {
+    flex: 1,
+    flexDirection: 'row',
+    position: 'relative'
+  },
   editorScroll: {
     flex: 1,
     backgroundColor: '#FFF',
     margin: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderBottomColor: '#E1E6EB'
+    borderColor: '#E1E6EB'
   },
   editorInput: {
     flex: 1,
     padding: 15,
     fontFamily: 'monospace',
     fontSize: 14,
-    color: '#1A1F26'
+    color: '#1A1F26',
+    minHeight: 300
+  },
+  scrollNavigation: {
+    position: 'absolute',
+    right: 20,
+    bottom: 20,
+    justifyContent: 'space-between',
+    height: 110,
+    zIndex: 10
+  },
+  navArrow: {
+    backgroundColor: 'rgba(0, 82, 204, 0.8)',
+    width: 45,
+    height: 45,
+    borderRadius: 23,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5
+  },
+  navArrowText: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: 'bold'
   },
   loaderContainer: {
     flex: 1,
@@ -331,19 +459,23 @@ const styles = StyleSheet.create({
   },
   btnBottom: {
     flex: 1,
-    paddingVertical: 14,
-    marginHorizontal: 5,
+    paddingVertical: 12,
+    marginHorizontal: 3,
     borderRadius: 6,
-    alignItems: 'center'
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   btnSaveColor: {
     backgroundColor: '#28A745'
+  },
+  btnSaveAsColor: {
+    backgroundColor: '#FD7E14'
   },
   btnShareColor: {
     backgroundColor: '#17A2B8'
   },
   btnDisabled: {
     backgroundColor: '#A0AEC0',
-    opacity: 0.6
+    opacity: 0.5
   }
 });
