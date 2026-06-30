@@ -10,8 +10,8 @@ buildscript {
     repositories {
         google()
         mavenCentral()
-        // Указываем путь к локальным файлам плагина внутри node_modules
-        maven { url(new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).parentFile.toString() + "/android") }
+        // Прямой путь к локальному репозиторию плагина в node_modules
+        maven { url "${rootDir}/../node_modules/react-native/android" }
     }
     dependencies {
         classpath("com.android.tools.build:gradle:8.1.1")
