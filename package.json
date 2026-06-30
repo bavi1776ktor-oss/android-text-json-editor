@@ -1,5 +1,5 @@
 {
-  "name": "android-text-json-editor",
+  "name": "my-text-editor",
   "version": "1.0.0",
   "private": true,
   "scripts": {
@@ -8,7 +8,8 @@
   },
   "dependencies": {
     "react": "18.3.1",
-    "react-native": "0.75.2"
+    "react-native": "0.75.2",
+    "react-native-document-picker": "^9.3.0"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",
