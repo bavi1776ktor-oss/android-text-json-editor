@@ -1,0 +1,33 @@
+#!/usr/bin/env sh
+
+# Resolve links: $0 may be a link
+PRG="$0"
+while [ -h "$PRG" ] ; do
+  ls=`ls -ld "$PRG"`
+  link=`expr "$ls" : '.*-> \(.*\)$'`
+  if expr "$link" : '/.*' > /dev/null; then
+    PRG="$link"
+  else
+    PRG=`dirname "$PRG"`/"$link"
+  fi
+done
+
+PRGDIR=`dirname "$PRG"`
+APP_BASE_NAME=`basename "$PRG"`
+APP_HOME=`cd "$PRGDIR" >/dev/null; pwd`
+
+# For Cygwin, ensure paths are in UNIX format before anything is touched
+if case "`uname`" in CYGWIN*) true;; *) false;; esac ; then
+  [ -n "$JAVA_HOME" ] && JAVA_HOME=`cygpath --unix "$JAVA_HOME"`
+fi
+
+JAVACMD="java"
+if [ -n "$JAVA_HOME" ] ; then
+  if [ -x "$JAVA_HOME/bin/java" ] ; then
+    JAVACMD="$JAVA_HOME/bin/java"
+  fi
+fi
+
+CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
+
+exec "$JAVACMD" "-Dorg.gradle.appname=$APP_BASE_NAME" -classpath "$CLASSPATH" org.gradle.wrapper.GradleWrapperMain "$@"
