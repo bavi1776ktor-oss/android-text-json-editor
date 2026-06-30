@@ -3,17 +3,17 @@ apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
 android {
-    className = "com.keyseditor.MainActivity"
-    compileSdk = 34
-
     namespace "com.keyseditor"
+    compileSdk 34
+
     defaultConfig {
         applicationId "com.keyseditor"
-        minSdk = 21
-        targetSdk = 34
+        minSdk 21
+        targetSdk 34
         versionCode 1
         versionName "1.0"
     }
+
     signingConfigs {
         debug {
             storeFile file('debug.keystore')
@@ -22,6 +22,7 @@ android {
             keyPassword 'android'
         }
     }
+
     buildTypes {
         release {
             signingConfig signingConfigs.debug
