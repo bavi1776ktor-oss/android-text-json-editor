@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -8,11 +8,14 @@ import {
   SafeAreaView,
   ScrollView,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  Dimensions
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+
+const { height } = Dimensions.get('window');
 
 const translations = {
   ru: {
@@ -34,7 +37,6 @@ const translations = {
     alertSaveError: "Не удалось сохранить файл. Попробуйте 'Сохранить как...'",
     alertInvalidJson: "Внимание: Неверный формат JSON!",
     alertShareError: "Невозможно поделиться файлом",
-    searchNotFound: "Ничего не найдено",
     langBtn: "Укр"
   },
   uk: {
@@ -56,7 +58,6 @@ const translations = {
     alertSaveError: "Не вдалося зберегти файл. Спробуйте 'Зберегти як...'",
     alertInvalidJson: "Увага: Невірний формат JSON!",
     alertShareError: "Неможливо поділитися файлом",
-    searchNotFound: "Нічого не знайдено",
     langBtn: "Рус"
   }
 };
@@ -69,8 +70,10 @@ export default function App() {
   const [fileType, setFileType] = useState(null);
   const [loading, setLoading] = useState(false);
   
-  // Поиск
+  // Логика Поиска
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [currentResultIndex, setCurrentResultIndex] = useState(-1);
   
   const t = translations[lang];
   const scrollViewRef = useRef(null);
@@ -79,13 +82,63 @@ export default function App() {
     setLang(lang === 'ru' ? 'uk' : 'ru');
   };
 
-  // Открытие файла
+  // Эффект для автоматического расчета совпадений при вводе текста в поиск
+  useEffect(() => {
+    if (!searchQuery || !fileContent) {
+      setSearchResults([]);
+      setCurrentResultIndex(-1);
+      return;
+    }
+
+    const query = searchQuery.toLowerCase();
+    const content = fileContent.toLowerCase();
+    const positions = [];
+    let pos = content.indexOf(query);
+
+    while (pos !== -1) {
+      positions.push(pos);
+      pos = content.indexOf(query, pos + 1);
+    }
+
+    setSearchResults(positions);
+    if (positions.length > 0) {
+      setCurrentResultIndex(0);
+    } else {
+      setCurrentResultIndex(-1);
+    }
+  }, [searchQuery, fileContent]);
+
+  // Прыжок к конкретному результату поиска
+  useEffect(() => {
+    if (currentResultIndex !== -1 && searchResults[currentResultIndex] !== undefined) {
+      const charIndex = searchResults[currentResultIndex];
+      const totalChars = fileContent.length || 1;
+      
+      // Расчет примерной высоты скролла на основе позиции символа в тексте
+      const estimatedContentHeight = Math.max(height, totalChars * 0.4); 
+      const scrollY = (charIndex / totalChars) * estimatedContentHeight;
+
+      scrollViewRef.current?.scrollTo({ y: Math.max(0, scrollY - 100), animated: true });
+    }
+  }, [currentResultIndex, searchResults]);
+
+  const handleNextSearch = () => {
+    if (searchResults.length === 0) return;
+    setCurrentResultIndex((prev) => (prev + 1) % searchResults.length);
+  };
+
+  const handlePrevSearch = () => {
+    if (searchResults.length === 0) return;
+    setCurrentResultIndex((prev) => (prev - 1 + searchResults.length) % searchResults.length);
+  };
+
+  // Файловые операции
   const handleOpenFile = async () => {
     setLoading(true);
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: ['text/plain', 'application/json', '*/*'],
-        copyToCacheDirectory: false // Берем напрямую, чтобы сохранить права на исходник
+        copyToCacheDirectory: false
       });
 
       if (!result.canceled && result.assets && result.assets[0]) {
@@ -96,6 +149,7 @@ export default function App() {
         setFileName(file.name);
         setFileContent(content);
         setFileType(file.name.toLowerCase().endsWith('.json') ? 'json' : 'txt');
+        setSearchQuery('');
       }
     } catch (error) {
       Alert.alert(t.alertError, t.alertReadError);
@@ -109,6 +163,7 @@ export default function App() {
     setFileName('new_file.json');
     setFileType('json');
     setFileUri(null);
+    setSearchQuery('');
   };
 
   const handleCreateNewTxt = () => {
@@ -116,9 +171,9 @@ export default function App() {
     setFileName('new_file.txt');
     setFileType('txt');
     setFileUri(null);
+    setSearchQuery('');
   };
 
-  // Валидация JSON
   const validateJson = () => {
     if (fileType === 'json') {
       try {
@@ -132,44 +187,34 @@ export default function App() {
     return true;
   };
 
-  // ОБЫЧНОЕ СОХРАНЕНИЕ (В ИСХОДНИК)
   const handleSaveFile = async () => {
     if (!validateJson()) return;
-
     setLoading(true);
     try {
       if (fileUri) {
-        // Запись в оригинальный URI, полученный от системы
         await FileSystem.writeAsStringAsync(fileUri, fileContent, {
           encoding: FileSystem.EncodingType.UTF8
         });
         Alert.alert(t.alertSuccess, t.alertSaved);
       } else {
-        // Если файл новый и структуры на диске еще нет — перенаправляем на "Сохранить как..."
         handleSaveAsFile();
       }
     } catch (error) {
-      // На Android SAF (Storage Access Framework) иногда блокирует перезапись напрямую,
-      // в таком случае выводим ошибку и предлагаем юзеру сохранить копию.
       Alert.alert(t.alertError, t.alertSaveError);
     } finally {
       setLoading(false);
     }
   };
 
-  // СОХРАНИТЬ КАК... (Экспорт через шеринг/проводник)
   const handleSaveAsFile = async () => {
     if (!validateJson()) return;
-
     setLoading(true);
     try {
-      // Пишем временный файл в кэш Expo
       const tempUri = FileSystem.cacheDirectory + fileName;
       await FileSystem.writeAsStringAsync(tempUri, fileContent, {
         encoding: FileSystem.EncodingType.UTF8
       });
 
-      // Вызываем системный диалог, позволяющий сохранить файл в любую папку устройства
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(tempUri, { dialogTitle: t.btnSaveAs });
       } else {
@@ -182,7 +227,6 @@ export default function App() {
     }
   };
 
-  // Поделиться
   const handleShareFile = async () => {
     try {
       const tempUri = FileSystem.cacheDirectory + fileName;
@@ -193,12 +237,10 @@ export default function App() {
     }
   };
 
-  // Быстрый скролл ВВЕРХ
   const scrollToTop = () => {
     scrollViewRef.current?.scrollTo({ y: 0, animated: true });
   };
 
-  // Быстрый скролл ВНИЗ
   const scrollToBottom = () => {
     scrollViewRef.current?.scrollToEnd({ animated: true });
   };
@@ -213,7 +255,7 @@ export default function App() {
         </TouchableOpacity>
       </View>
 
-      {/* Кнопки создания/открытия */}
+      {/* Верхний бар кнопок */}
       <View style={styles.topBar}>
         <TouchableOpacity style={styles.btnAction} onPress={handleOpenFile}>
           <Text style={styles.btnText}>{t.btnOpen}</Text>
@@ -226,8 +268,8 @@ export default function App() {
         </TouchableOpacity>
       </View>
 
-      {/* Панель поиска */}
-      <View style={styles.searchBar}>
+      {/* Панель поиска со стрелками перехода */}
+      <View style={styles.searchBarContainer}>
         <TextInput
           style={styles.searchInput}
           placeholder={t.searchPlaceholder}
@@ -236,6 +278,19 @@ export default function App() {
           autoCapitalize="none"
           autoCorrect={false}
         />
+        {searchResults.length > 0 && (
+          <View style={styles.searchControls}>
+            <Text style={styles.searchCounter}>
+              {currentResultIndex + 1}/{searchResults.length}
+            </Text>
+            <TouchableOpacity style={styles.btnSearchArrow} onPress={handlePrevSearch}>
+              <Text style={styles.arrowText}>◀</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.btnSearchArrow} onPress={handleNextSearch}>
+              <Text style={styles.arrowText}>▶</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       {/* Статус-бар */}
@@ -245,7 +300,7 @@ export default function App() {
         </Text>
       </View>
 
-      {/* Рабочая зона */}
+      {/* Редактор */}
       {loading ? (
         <View style={styles.loaderContainer}>
           <ActivityIndicator size="large" color="#0052CC" />
@@ -256,7 +311,7 @@ export default function App() {
             ref={scrollViewRef} 
             style={styles.editorScroll} 
             contentContainerStyle={{ flexGrow: 1 }}
-            removeClippedSubviews={true} // Оптимизация для тяжелых файлов
+            removeClippedSubviews={true}
           >
             <TextInput
               style={styles.editorInput}
@@ -265,8 +320,6 @@ export default function App() {
               placeholder={t.placeholder}
               value={fileContent}
               onChangeText={setFileContent}
-              
-              // Отключаем всё лишнее, чтобы убрать лаги на 5000+ строках
               autoCapitalize="none"
               autoCorrect={false}
               spellCheck={false}
@@ -274,7 +327,7 @@ export default function App() {
             />
           </ScrollView>
 
-          {/* Стрелки быстрой навигации (Плавающие справа) */}
+          {/* Быстрые стрелки скролла Вверх / Вниз */}
           {fileName ? (
             <View style={styles.scrollNavigation}>
               <TouchableOpacity style={styles.navArrow} onPress={scrollToTop}>
@@ -288,7 +341,7 @@ export default function App() {
         </View>
       )}
 
-      {/* Нижние кнопки действий */}
+      {/* Нижняя панель действий */}
       <View style={styles.bottomBar}>
         <TouchableOpacity 
           style={[styles.btnBottom, styles.btnSaveColor, !fileName && styles.btnDisabled]} 
@@ -373,12 +426,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center'
   },
-  searchBar: {
+  searchBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 10,
     paddingBottom: 10,
     backgroundColor: '#FFF'
   },
   searchInput: {
+    flex: 1,
     backgroundColor: '#F0F2F5',
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -386,6 +442,28 @@ const styles = StyleSheet.create({
     fontSize: 14,
     borderWidth: 1,
     borderColor: '#E1E6EB'
+  },
+  searchControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 8
+  },
+  searchCounter: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#4A5568',
+    marginRight: 6
+  },
+  btnSearchArrow: {
+    backgroundColor: '#E1E6EB',
+    padding: 8,
+    marginHorizontal: 2,
+    borderRadius: 4
+  },
+  arrowText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#1A1F26'
   },
   statusContainer: {
     paddingHorizontal: 15,
@@ -416,7 +494,7 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     fontSize: 14,
     color: '#1A1F26',
-    minHeight: 300
+    minHeight: 350
   },
   scrollNavigation: {
     position: 'absolute',
@@ -433,10 +511,6 @@ const styles = StyleSheet.create({
     borderRadius: 23,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
     elevation: 5
   },
   navArrowText: {
