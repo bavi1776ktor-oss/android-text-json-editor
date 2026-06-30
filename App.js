@@ -70,7 +70,7 @@ export default function App() {
   const [fileType, setFileType] = useState(null);
   const [loading, setLoading] = useState(false);
   
-  // Логика Поиска
+  // Поиск и подсветка
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [currentResultIndex, setCurrentResultIndex] = useState(-1);
@@ -82,7 +82,7 @@ export default function App() {
     setLang(lang === 'ru' ? 'uk' : 'ru');
   };
 
-  // Эффект для автоматического расчета совпадений при вводе текста в поиск
+  // Поиск всех вхождений строки (без учета регистра)
   useEffect(() => {
     if (!searchQuery || !fileContent) {
       setSearchResults([]);
@@ -108,17 +108,16 @@ export default function App() {
     }
   }, [searchQuery, fileContent]);
 
-  // Прыжок к конкретному результату поиска
+  // Прыжок к найденному совпадению
   useEffect(() => {
     if (currentResultIndex !== -1 && searchResults[currentResultIndex] !== undefined) {
       const charIndex = searchResults[currentResultIndex];
       const totalChars = fileContent.length || 1;
       
-      // Расчет примерной высоты скролла на основе позиции символа в тексте
-      const estimatedContentHeight = Math.max(height, totalChars * 0.4); 
+      const estimatedContentHeight = Math.max(height, totalChars * 0.35); 
       const scrollY = (charIndex / totalChars) * estimatedContentHeight;
 
-      scrollViewRef.current?.scrollTo({ y: Math.max(0, scrollY - 100), animated: true });
+      scrollViewRef.current?.scrollTo({ y: Math.max(0, scrollY - 120), animated: true });
     }
   }, [currentResultIndex, searchResults]);
 
@@ -131,6 +130,44 @@ export default function App() {
     if (searchResults.length === 0) return;
     setCurrentResultIndex((prev) => (prev - 1 + searchResults.length) % searchResults.length);
   };
+
+  // Функция рендеринга подсвеченного текста
+  const renderHighlightedText = () => {
+    if (!searchQuery || searchResults.length === 0) {
+      return <Text style={styles.highlightDummyText}>{fileContent}</Text>;
+    }
+
+    const parts = fileContent.split(new RegExp(`(${escapeRegExp(searchQuery)})`, 'gi'));
+    let globalCharOffset = 0;
+
+    return (
+      <Text style={styles.highlightDummyText}>
+        {parts.map((part, index) => {
+          const isMatch = part.toLowerCase() === searchQuery.toLowerCase();
+          const currentOffset = globalCharOffset;
+          globalCharOffset += part.length;
+
+          if (isMatch) {
+            // Проверяем, является ли это совпадение текущим выбранным
+            const isCurrent = searchResults[currentResultIndex] === currentOffset;
+            return (
+              <Text 
+                key={index} 
+                style={isCurrent ? styles.currentMatch : styles.normalMatch}
+              >
+                {part}
+              </Text>
+            );
+          }
+          return <Text key={index}>{part}</Text>;
+        })}
+      </Text>
+    );
+  };
+
+  function escapeRegExp(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
 
   // Файловые операции
   const handleOpenFile = async () => {
@@ -255,7 +292,7 @@ export default function App() {
         </TouchableOpacity>
       </View>
 
-      {/* Верхний бар кнопок */}
+      {/* Верхние кнопки создания/открытия */}
       <View style={styles.topBar}>
         <TouchableOpacity style={styles.btnAction} onPress={handleOpenFile}>
           <Text style={styles.btnText}>{t.btnOpen}</Text>
@@ -313,18 +350,31 @@ export default function App() {
             contentContainerStyle={{ flexGrow: 1 }}
             removeClippedSubviews={true}
           >
-            <TextInput
-              style={styles.editorInput}
-              multiline
-              textAlignVertical="top"
-              placeholder={t.placeholder}
-              value={fileContent}
-              onChangeText={setFileContent}
-              autoCapitalize="none"
-              autoCorrect={false}
-              spellCheck={false}
-              autoComplete="off"
-            />
+            <View style={styles.textContainer}>
+              {/* Слой с подсвеченным текстом */}
+              {searchQuery.length > 0 && (
+                <View style={styles.highlightLayer} pointerEvents="none">
+                  {renderHighlightedText()}
+                </View>
+              )}
+              
+              {/* Настоящее текстовое поле ввода. Цвет текста становится прозрачным при активном поиске */}
+              <TextInput
+                style={[
+                  styles.editorInput,
+                  searchQuery.length > 0 && { color: 'rgba(26, 31, 38, 0.15)' }
+                ]}
+                multiline
+                textAlignVertical="top"
+                placeholder={t.placeholder}
+                value={fileContent}
+                onChangeText={setFileContent}
+                autoCapitalize="none"
+                autoCorrect={false}
+                spellCheck={false}
+                autoComplete="off"
+              />
+            </View>
           </ScrollView>
 
           {/* Быстрые стрелки скролла Вверх / Вниз */}
@@ -488,13 +538,41 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E1E6EB'
   },
+  textContainer: {
+    position: 'relative',
+    flex: 1
+  },
   editorInput: {
     flex: 1,
     padding: 15,
     fontFamily: 'monospace',
     fontSize: 14,
     color: '#1A1F26',
-    minHeight: 350
+    minHeight: 400
+  },
+  highlightLayer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    padding: 15,
+    backgroundColor: 'transparent'
+  },
+  highlightDummyText: {
+    fontFamily: 'monospace',
+    fontSize: 14,
+    color: '#1A1F26'
+  },
+  normalMatch: {
+    backgroundColor: '#FFEB3B', // Обычные совпадения подсвечиваются желтым
+    color: '#000',
+    fontWeight: 'bold'
+  },
+  currentMatch: {
+    backgroundColor: '#FF9800', // Текущее выбранное совпадение — ярко-оранжевое
+    color: '#FFF',
+    fontWeight: 'bold'
   },
   scrollNavigation: {
     position: 'absolute',
