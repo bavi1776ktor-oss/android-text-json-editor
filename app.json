@@ -4,6 +4,7 @@
     "slug": "android-text-json-editor",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./icon.png",
     "userInterfaceStyle": "light",
     "splash": {
       "backgroundColor": "#ffffff"
