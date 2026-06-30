@@ -41,7 +41,7 @@ jobs:
       - name: Generate Gradle Wrapper
         run: |
           cd android
-          gradle wrapper --gradle-version 8.5
+          gradle wrapper --gradle-version 8.3
 
       - name: Build Android Release APK
         run: |
