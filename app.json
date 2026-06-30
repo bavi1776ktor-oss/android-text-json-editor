@@ -4,7 +4,6 @@
     "slug": "android-text-json-editor",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./icon.png",
     "userInterfaceStyle": "light",
     "splash": {
       "resizeMode": "contain",
@@ -18,9 +17,6 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.keyseditor"
-    },
-    "web": {
-      "favicon": "./assets/favicon.png"
     }
   }
 }
