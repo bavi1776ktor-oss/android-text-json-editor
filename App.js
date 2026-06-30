@@ -1,968 +1,349 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  StyleSheet, 
-  Text, 
-  View, 
-  TouchableOpacity, 
-  Modal, 
-  TextInput, 
-  ScrollView, 
-  SafeAreaView, 
-  Dimensions,
+import React, { useState } from 'react';
+import {
+  StyleSheet,
+  Text,
+  View,
+  TextInput,
+  TouchableOpacity,
+  SafeAreaView,
+  ScrollView,
   Alert,
-  ActivityIndicator,
-  Linking
+  ActivityIndicator
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Print from 'expo-print';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import * as Application from 'expo-application';
-
-const { width } = Dimensions.get('window');
-const TRIAL_DURATION_SECONDS = 7 * 24 * 60 * 60;
-const MY_TARGET_EMAIL = "kluh2026@gmail.com"; 
-
-const FIREBASE_REST_URL = "https://my-apk-protection-default-rtdb.firebaseio.com";
 
 const translations = {
   ru: {
-    locale: 'ru-RU',
-    trialExpiredTitle: "Срок пробного тестирования (7 дней) окончен",
-    requestFullVersion: "Запросить полную версию:",
-    requestFullVersionHeader: "Запросить полную версию",
-    placeholderName: "Ваше Имя",
-    placeholderPhone: "Телефон",
-    btnSendRequest: "Отправить запрос",
-    noticeText: "Введите Ваше имя и телефон. Ожайдайте, Вам перезвонят.",
-    enterKeyTitle: "Ввести постоянный ключ:",
-    placeholderKey: "Постоянный ключ активации",
-    btnActivate: "Активировать",
-    btnExit: "Выход",
-    weekDays: ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'],
-    statsWorkDays: "Рабочих дней",
-    statsWeekendDays: "Выходных дней",
-    statsTotalSum: "Сумма",
-    btnArchive: "Архив",
-    btnSavePdf: "Сохранить PDF",
-    modalDayTitle: "День",
-    placeholderRate: "Ставка",
-    placeholderHours: "Часы",
+    title: "Редактор JSON и TXT",
+    btnOpen: "Открыть файл",
+    btnNewJson: "+ Новый JSON",
+    btnNewTxt: "+ Новый TXT",
     btnSave: "Сохранить",
-    btnCancel: "Отмена",
-    btnClose: "Закрыть",
-    archiveEarnings: "Заработок",
-    toastTrialActive: "⏱ АКТИВЕН ТЕСТОВЫЙ ПЕРИОД (ОСТАЛОСЬ {days} ДН.)",
-    pdfTitle: "Отчет — {month}",
-    pdfStatusWork: "Рабочий",
-    pdfStatusWeekend: "Выходной",
-    pdfColDay: "День",
-    pdfColStatus: "Статус",
-    pdfColRate: "Ставка",
-    pdfColHours: "Часы",
-    pdfColSum: "Сумма",
-    alertExitTitle: "Выход",
-    alertExitMessage: "Выйти из профиля?",
-    alertExitCancel: "Отмена",
-    alertFormatError: "Неверный формат",
-    alertFormatShort: "Слишком короткий ключ активации.",
-    alertSuccessTitle: "Успешно",
-    alertSuccessMessage: "Приложение успешно активировано!",
-    alertKeyUsed: "Этот ключ уже закреплен за другим устройством!",
-    alertKeyBlock: "Этот ключ заблокирован администратором.",
-    alertKeyNotFound: "Ключ не найден в базе данных.",
-    alertInputError: "Введите корректные числа",
-    alertPdfError: "Не удалось создать PDF",
-    alertRequestSaved: "Данные записаны в базу. На вашем устройстве не найдено настроенное приложение почты для прямой отправки.",
-    alertMailError: "Запрос успешно сохранен в Firebase, но не удалось запустить почтовое приложение.",
-    alertFillFields: "Пожалуйста, заполните Имя и Телефон для связи",
-    btnToday: "Сегодня",
-    noRecordsText: "Нет записей за этот день",
-    subSectionTitle: "Работы за день:",
-    dayTotalText: "Всего за день:",
-    btnAddRecord: "+ Добавить запись",
-    selectLangTitle: "Выберите язык (Рус)",
-    errorTitle: "Ошибка",
-    networkErrorTitle: "Ошибка сети",
-    networkErrorMsg: "Не удалось обновить данные из базы",
-    activationErrorTitle: "Ошибка активации",
-    lockTitle: "Блокировка",
-    noticeTitle: "Уведомление",
-    networkSendError: "Не удалось отправить данные",
-    hourUnit: "ч."
+    btnShare: "Поделиться",
+    placeholder: "Текст файла отобразится здесь...",
+    statusEmpty: "Файл не выбран",
+    statusEditing: "Редактирование: ",
+    alertSuccess: "Успешно",
+    alertSaved: "Файл успешно сохранен!",
+    alertError: "Ошибка",
+    alertReadError: "Не удалось прочитать файл",
+    alertSaveError: "Не удалось сохранить файл",
+    alertInvalidJson: "Внимание: Неверный формат JSON!",
+    alertShareError: "Невозможно поделиться файлом",
+    langBtn: "Укр"
   },
   uk: {
-    locale: 'uk-UA',
-    trialExpiredTitle: "Термін дії пробного періоду (7 днів) закінчився",
-    requestFullVersion: "Надіслати запит на повну версію:",
-    requestFullVersionHeader: "Запитувати повну версію",
-    placeholderName: "Ваше Ім'я",
-    placeholderPhone: "Телефон",
-    btnSendRequest: "Надіслати запит",
-    noticeText: "Введіть Ваше ім'я та телефон. Очікуйте, Вам зателефонують.",
-    enterKeyTitle: "Ввести ключ активації:",
-    placeholderKey: "Ключ активації (постійний)",
-    btnActivate: "Активувати",
-    btnExit: "Вихід",
-    weekDays: ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'],
-    statsWorkDays: "Робочих днів",
-    statsWeekendDays: "Вихідних днів",
-    statsTotalSum: "Сума",
-    btnArchive: "Архів",
-    btnSavePdf: "Зберегти PDF",
-    modalDayTitle: "День",
-    placeholderRate: "Ставка",
-    placeholderHours: "Години",
-    btnSave: "Скасувати",
-    btnCancel: "Скасувати",
-    btnClose: "Закрити",
-    archiveEarnings: "Заробіток",
-    toastTrialActive: "⏱ АКТИВНИЙ ТЕСТОВЙ ПЕРІОД (ЗАЛИШИЛОСЯ {days} ДН.)",
-    pdfTitle: "Звіт — {month}",
-    pdfStatusWork: "Робочий",
-    pdfStatusWeekend: "Вихідний",
-    pdfColDay: "День",
-    pdfColStatus: "Статус",
-    pdfColRate: "Ставка",
-    pdfColHours: "Години",
-    pdfColSum: "Сума",
-    alertExitTitle: "Вихід",
-    alertExitMessage: "Вийти з профілю?",
-    alertExitCancel: "Скасувати",
-    alertFormatError: "Неправильний формат",
-    alertFormatShort: "Занадто короткий ключ активації.",
-    alertSuccessTitle: "Успішно",
-    alertSuccessMessage: "Додаток успешно активовано!",
-    alertKeyUsed: "Цей ключ вже закріплений за іншим пристроєм!",
-    alertKeyBlock: "Цей ключ заблокований адміністратором.",
-    alertKeyNotFound: "Ключ не знайдено в базі даних.",
-    alertInputError: "Введіть коректні числа",
-    alertPdfError: "Не вдалося створити PDF",
-    alertRequestSaved: "Дані записані в базу. На вашому пристрої не знайдено налаштованого поштового додатка для прямої відправки.",
-    alertMailError: "Запит успішно збережено в Firebase, но не вдалося запустити поштовий додаток.",
-    alertFillFields: "Будь ласка, заповніть Ім'я та Телефон для зв'язку",
-    btnToday: "Сьогодні",
-    noRecordsText: "Немає записів за цей день",
-    subSectionTitle: "Роботи за день:",
-    dayTotalText: "Всього за день:",
-    btnAddRecord: "+ Додати запис",
-    selectLangTitle: "Оберіть мову (Укр)",
-    errorTitle: "Помилка",
-    networkErrorTitle: "Помилка мережі",
-    networkErrorMsg: "Не вдалося оновити дані з бази",
-    activationErrorTitle: "Помилка активації",
-    lockTitle: "Блокування",
-    noticeTitle: "Сповіщення",
-    networkSendError: "Не вдалося надіслати дані",
-    hourUnit: "год."
+    title: "Редактор JSON та TXT",
+    btnOpen: "Відкрити файл",
+    btnNewJson: "+ Новий JSON",
+    btnNewTxt: "+ Новий TXT",
+    btnSave: "Зберегти",
+    btnShare: "Поділитись",
+    placeholder: "Текст файлу відобразиться тут...",
+    statusEmpty: "Файл не обрано",
+    statusEditing: "Редагування: ",
+    alertSuccess: "Успішно",
+    alertSaved: "Файл успішно збережено!",
+    alertError: "Помилка",
+    alertReadError: "Не вдалося прочитати файл",
+    alertSaveError: "Не вдалося зберегти файл",
+    alertInvalidJson: "Увага: Невірний формат JSON!",
+    alertShareError: "Неможливо поділитися файлом",
+    langBtn: "Рус"
   }
 };
 
-const styles = StyleSheet.create({
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  authContainer: { flex: 1, backgroundColor: '#fff' },
-  authCardExpired: { padding: 20 },
-  authTitleExpired: { fontSize: 18, fontWeight: 'bold', color: 'red', textAlign: 'center' },
-  authSubtitleBold: { fontWeight: 'bold', marginTop: 15 },
-  authInputMargin: { borderWidth: 1, borderColor: '#ccc', padding: 10, marginTop: 5 },
-  authInputMarginLarge: { borderWidth: 1, borderColor: '#ccc', padding: 10, marginTop: 5, marginBottom: 15 },
-  authBtnSend: { backgroundColor: '#0052CC', padding: 15, alignItems: 'center' },
-  authButtonText: { color: '#fff', fontWeight: 'bold' },
-  noticeContainer: { marginTop: 10 },
-  noticeSubText: { color: '#666', fontSize: 12 },
-  separator: { height: 1, backgroundColor: '#ccc', marginVertical: 20 },
-  authInput: { borderWidth: 1, borderColor: '#ccc', padding: 10, marginTop: 5 },
-  authBtnActivate: { backgroundColor: '#28a745', padding: 15, alignItems: 'center', marginTop: 10 },
-  safeArea: { flex: 1 },
-  container: { flex: 1, padding: 10 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  headerTimeBlock: { id: 1 },
-  dateText: { fontSize: 14 },
-  timeText: { fontSize: 16, fontWeight: 'bold' },
-  requestHeaderButton: { backgroundColor: '#ffc107', padding: 8 },
-  requestHeaderButtonText: { color: '#000', fontSize: 12 },
-  logoutButton: { padding: 10 },
-  logoutText: { color: 'red' },
-  monthSelectorRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 10 },
-  langCircleRu: { width: 30, height: 30, borderRadius: 15, backgroundColor: 'blue', justifyContent: 'center', alignItems: 'center' },
-  langCircleRuDimmed: { width: 30, height: 30, borderRadius: 15, backgroundColor: 'gray', justifyContent: 'center', alignItems: 'center' },
-  langCircleText: { color: '#fff' },
-  monthTitleWrapper: { alignItems: 'center' },
-  monthTitle: { fontSize: 18, fontWeight: 'bold' },
-  todayButton: { marginTop: 5 },
-  todayButtonText: { color: 'blue', fontSize: 12 },
-  langCircleUk: { width: 30, height: 30, borderRadius: 15, backgroundColor: 'blue', justifyContent: 'center', alignItems: 'center' },
-  langCircleUkDimmed: { width: 30, height: 30, borderRadius: 15, backgroundColor: 'gray', justifyContent: 'center', alignItems: 'center' },
-  weekDaysRow: { flexDirection: 'row', justifyContent: 'space-around', marginVertical: 5 },
-  weekDayTextNormal: { color: '#000' },
-  weekDayTextWeekend: { color: 'red' },
-  centerLoading: { flex: 1, justifyContent: 'center' },
-  calendarGrid: { paddingBottom: 20 },
-  calendarRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 5 },
-  emptyCell: { width: width / 8, height: 40 },
-  weekendCell: { width: width / 8, height: 45, backgroundColor: '#f8d7da', justifyContent: 'center', alignItems: 'center' },
-  workDayCell: { width: width / 8, height: 45, backgroundColor: '#d4edda', justifyContent: 'center', alignItems: 'center' },
-  dayText: { fontSize: 14 },
-  workDayText: { fontSize: 14, fontWeight: 'bold' },
-  cellSumSubtext: { fontSize: 9, color: 'green' },
-  statsContainer: { padding: 10, backgroundColor: '#eee', marginTop: 10 },
-  statsText: { fontSize: 14 },
-  totalText: { fontSize: 16, fontWeight: 'bold', marginTop: 5 },
-  archiveButton: { backgroundColor: '#6c757d', padding: 10, alignItems: 'center', marginTop: 5 },
-  archiveButtonText: { color: '#fff' },
-  pdfButton: { backgroundColor: '#17a2b8', padding: 10, alignItems: 'center', marginTop: 5 },
-  pdfButtonText: { color: '#fff' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  modalContentLang: { backgroundColor: '#fff', padding: 20, borderRadius: 10 },
-  btnLangUk: { backgroundColor: 'blue', padding: 10, marginBottom: 10 },
-  btnLangRu: { backgroundColor: 'green', padding: 10 },
-  modalContent: { backgroundColor: '#fff', padding: 20, width: '80%', borderRadius: 10 },
-  modalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 10 },
-  input: { borderWidth: 1, borderColor: '#ccc', padding: 8, marginBottom: 10 },
-  modalButtons: { flexDirection: 'row', justifyContent: 'space-between' },
-  btnRequestSave: { backgroundColor: 'green', padding: 10 },
-  btn: { padding: 10 },
-  btnCancel: { backgroundColor: 'red' },
-  btnText: { color: '#fff' },
-  noticeContainerMargin: { marginTop: 10 },
-  archiveScroll: { maxHeight: 200 },
-  archiveItemRow: { padding: 10, borderBottomWidth: 1, borderBottomColor: '#ccc' },
-  archiveMonthNameText: { fontSize: 14 },
-  btnCloseArchive: { backgroundColor: 'gray', padding: 10, alignItems: 'center', marginTop: 10 },
-  miniRecordsList: { maxHeight: 100 },
-  miniRecordRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 5 },
-  miniRecordText: { fontSize: 14 },
-  miniDeleteBtn: { padding: 5 },
-  miniDeleteBtnText: { color: 'red' }
-});
-
 export default function App() {
-  const [lang, setLang] = useState(null);
-  const [langModalVisible, setLangModalVisible] = useState(false);
+  const [lang, setLang] = useState('ru');
+  const [fileContent, setFileContent] = useState('');
+  const [fileUri, setFileUri] = useState(null);
+  const [fileName, setFileName] = useState('');
+  const [fileType, setFileType] = useState(null); // 'json' или 'txt'
+  const [loading, setLoading] = useState(false);
 
-  const [password, setPassword] = useState(null); 
-  const [inputPassword, setInputPassword] = useState(''); 
-  const [isAuthChecking, setIsAuthChecking] = useState(true); 
-  const [isLoadingData, setIsLoadingData] = useState(false); 
+  const t = translations[lang];
 
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [workData, setWorkData] = useState({}); 
-  const [selectedDate, setSelectedDate] = useState(null);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [archiveModalVisible, setArchiveModalVisible] = useState(false); 
-  const [rate, setRate] = useState('');
-  const [hours, setHours] = useState('');
-
-  const [trialNotice, setTrialNotice] = useState(false); 
-  const [isTrialExpired, setIsTrialExpired] = useState(false); 
-  const [daysLeft, setDaysLeft] = useState(7);
-  const [requestModalVisible, setRequestModalVisible] = useState(false);
-  const [clientName, setClientName] = useState('');
-  const [clientPhone, setClientPhone] = useState('+38 (');
-
-  const t = translations[lang || 'ru'];
-
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 60000);
-    initLanguageAndAuth();
-    return () => clearInterval(timer);
-  }, []);
-
-  const initLanguageAndAuth = async () => {
-    try {
-      const savedLang = await AsyncStorage.getItem('@tabulka_lang');
-      if (savedLang === 'ru' || savedLang === 'uk') {
-        setLang(savedLang);
-      } else {
-        setLangModalVisible(true);
-      }
-    } catch (e) {
-      setLang('ru');
-    }
-    checkSavedPassword();
+  const toggleLang = () => {
+    setLang(lang === 'ru' ? 'uk' : 'ru');
   };
 
-  const handleSelectLanguage = async (selectedLang) => {
+  // Открытие файла через системный проводник
+  const handleOpenFile = async () => {
+    setLoading(true);
     try {
-      await AsyncStorage.setItem('@tabulka_lang', selectedLang);
-      setLang(selectedLang);
-      setLangModalVisible(false);
-    } catch (e) {
-      Alert.alert("Error", "Error saving language");
-    }
-  };
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['text/plain', 'application/json', '*/*'],
+        copyToCacheDirectory: true
+      });
 
-  const fetchWorkData = async (currentPassword) => {
-    if (!currentPassword) return;
-    setIsLoadingData(true);
-    try {
-      const viewYear = currentMonth.getFullYear();
-      const viewMonth = currentMonth.getMonth();
-      const response = await fetch(`${FIREBASE_REST_URL}/tabulka_lists/${currentPassword}/${viewYear}_${viewMonth}.json`);
-      const data = await response.json();
-      
-      if (data) {
-        const normalized = {};
-        Object.keys(data).forEach(dateKey => {
-          const dayContent = data[dateKey];
-          if (dayContent && typeof dayContent === 'object' && dayContent.records) {
-            normalized[dateKey] = dayContent;
-          } else if (dayContent && (dayContent.rate || dayContent.hours)) {
-            normalized[dateKey] = {
-              records: [{
-                id: 'legacy_' + Date.now() + '_' + Math.random(),
-                rate: parseFloat(dayContent.rate) || 0,
-                hours: parseFloat(dayContent.hours) || 0
-              }]
-            };
-          } else {
-            normalized[dateKey] = { records: [] };
-          }
-        });
-        setWorkData(normalized);
-      } else {
-        setWorkData({});
-      }
-    } catch (error) {
-      Alert.alert(t.networkErrorTitle, t.networkErrorMsg);
-    } finally {
-      setIsLoadingData(false);
-    }
-  };
-
-  useEffect(() => {
-    if (password) {
-      fetchWorkData(password);
-    } else {
-      setWorkData({});
-    }
-  }, [password, currentMonth]);
-
-  const checkSavedPassword = async () => {
-    try {
-      const deviceId = Application.androidId || "DEVICE_GENERIC";
-      const savedPass = await AsyncStorage.getItem('@tabulka_password');
-      
-      if (savedPass) {
-        const response = await fetch(`${FIREBASE_REST_URL}/activation_keys/${savedPass}.json`);
-        const keyData = await response.json();
+      if (!result.canceled && result.assets && result.assets[0]) {
+        const file = result.assets[0];
+        const content = await FileSystem.readAsStringAsync(file.uri);
         
-        if (keyData) {
-          if (keyData.status === "used" && keyData.deviceId === deviceId) {
-            setPassword(savedPass);
-            setIsAuthChecking(false);
-            return; 
-          }
-        }
+        setFileUri(file.uri);
+        setFileName(file.name);
+        setFileContent(content);
+        setFileType(file.name.toLowerCase().endsWith('.json') ? 'json' : 'txt');
       }
-
-      const trialResponse = await fetch(`${FIREBASE_REST_URL}/trial_devices/${deviceId}.json`);
-      const trialData = await trialResponse.json();
-      const currentTimeSeconds = Math.floor(Date.now() / 1000);
-
-      if (trialData) {
-        const timePassed = currentTimeSeconds - trialData.startedAt;
-        const remainingSeconds = TRIAL_DURATION_SECONDS - timePassed;
-
-        if (remainingSeconds <= 0) {
-          setIsTrialExpired(true);
-        } else {
-          const calculatedDays = Math.ceil(remainingSeconds / (24 * 60 * 60));
-          setDaysLeft(calculatedDays);
-          setPassword("TRIAL_MODE_" + deviceId);
-          setTrialNotice(true);
-          setTimeout(() => setTrialNotice(false), 3000);
-        }
-      } else {
-        await fetch(`${FIREBASE_REST_URL}/trial_devices/${deviceId}.json`, {
-          method: 'PUT',
-          body: JSON.stringify({ startedAt: currentTimeSeconds, deviceId: deviceId })
-        });
-        setDaysLeft(7);
-        setPassword("TRIAL_MODE_" + deviceId);
-        setTrialNotice(true);
-        setTimeout(() => setTrialNotice(false), 3000);
-      }
-
-    } catch (e) {
-      Alert.alert("Error", "Auth check failed");
-    } finally {
-      setIsAuthChecking(false);
-    }
-  };
-
-  const handleLogin = async () => {
-    const trimmed = inputPassword.trim();
-    if (trimmed.length < 3) {
-      Alert.alert(t.alertFormatError, t.alertFormatShort);
-      return;
-    }
-
-    setIsAuthChecking(true);
-
-    try {
-      const deviceId = Application.androidId || "DEVICE_GENERIC"; 
-      const response = await fetch(`${FIREBASE_REST_URL}/activation_keys/${trimmed}.json`);
-      const keyData = await response.json();
-      
-      if (keyData) {
-        const currentStatus = keyData.status || "free";
-        const currentDeviceId = keyData.deviceId || "";
-
-        if (currentStatus === "free" && currentDeviceId === "") {
-          await fetch(`${FIREBASE_REST_URL}/activation_keys/${trimmed}.json`, {
-            method: 'PATCH',
-            body: JSON.stringify({ status: "used", deviceId: deviceId })
-          });
-          await fetch(`${FIREBASE_REST_URL}/support_requests/${deviceId}.json`, { method: 'DELETE' });
-
-          await AsyncStorage.setItem('@tabulka_password', trimmed);
-          setIsTrialExpired(false); 
-          setPassword(trimmed);
-          setInputPassword('');
-          Alert.alert(t.alertSuccessTitle, t.alertSuccessMessage);
-        } else if (currentStatus === "used") {
-          if (currentDeviceId && currentDeviceId === deviceId) {
-            await fetch(`${FIREBASE_REST_URL}/support_requests/${deviceId}.json`, { method: 'DELETE' });
-            await AsyncStorage.setItem('@tabulka_password', trimmed);
-            setIsTrialExpired(false);
-            setPassword(trimmed);
-            setInputPassword('');
-          } else {
-            Alert.alert(t.activationErrorTitle, t.alertKeyUsed);
-          }
-        } else {
-          Alert.alert(t.lockTitle, t.alertKeyBlock);
-        }
-      } else {
-        Alert.alert(t.noticeTitle, t.alertKeyNotFound);
-      }
-    } catch (e) {
-      Alert.alert(t.networkErrorTitle, "Database connection failed");
-    } finally {
-      setIsAuthChecking(false);
-    }
-  };
-
-  const handleSendSupportRequest = async () => {
-    if (!clientName.trim() || clientPhone.trim() === '+38 (' || clientPhone.trim().length < 8) {
-      Alert.alert(t.errorTitle, t.alertFillFields);
-      return;
-    }
-
-    try {
-      const deviceId = Application.androidId || "DEVICE_GENERIC";
-      await fetch(`${FIREBASE_REST_URL}/support_requests/${deviceId}.json`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          name: clientName.trim(),
-          phone: clientPhone.trim(),
-          deviceId: deviceId,
-          createdAt: Math.floor(Date.now() / 1000)
-        })
-      });
-
-      const subject = encodeURIComponent("Запрос ключа активации Tabulka");
-      const body = encodeURIComponent(`Данные запроса:\n\nИмя: ${clientName.trim()}\nТелефон: ${clientPhone.trim()}\nID устройства: ${deviceId}`);
-      const mailtoUrl = `mailto:${MY_TARGET_EMAIL}?subject=${subject}&body=${body}`;
-
-      setRequestModalVisible(false);
-
-      const supported = await Linking.canOpenURL(mailtoUrl);
-      if (supported) {
-        await Linking.openURL(mailtoUrl);
-      } else {
-        Alert.alert(t.alertSuccessTitle, t.alertRequestSaved);
-      }
-    } catch (e) {
-      setRequestModalVisible(false);
-      Alert.alert(t.noticeTitle, t.alertMailError);
-    }
-  };
-
-  const handleLogout = () => {
-    Alert.alert(t.alertExitTitle, t.alertExitMessage, [
-      { text: t.alertExitCancel, style: "cancel" },
-      { 
-        text: t.btnExit, 
-        style: "destructive",
-        onPress: async () => {
-          await AsyncStorage.removeItem('@tabulka_password');
-          setIsTrialExpired(false);
-          setPassword(null);
-          checkSavedPassword(); 
-        }
-      }
-    ]);
-  };
-
-  const getDayTotal = (dayData) => {
-    if (!dayData || !dayData.records) return 0;
-    return dayData.records.reduce((sum, rec) => sum + (rec.rate * rec.hours), 0);
-  };
-
-  const getDayHours = (dayData) => {
-    if (!dayData || !dayData.records) return 0;
-    return dayData.records.reduce((sum, rec) => sum + rec.hours, 0);
-  };
-
-  const handleDayPress = (dateStr) => {
-    setSelectedDate(dateStr);
-    setRate('');
-    setHours('');
-    setModalVisible(true);
-  };
-
-  const handleAddRecord = () => {
-    const numRate = parseFloat(rate);
-    const numHours = parseFloat(hours);
-
-    if (!rate || !hours || isNaN(numRate) || isNaN(numHours) || numRate <= 0 || numHours <= 0) {
-      Alert.alert(t.errorTitle, t.alertInputError);
-      return;
-    }
-
-    const currentDayData = workData[selectedDate] || { records: [] };
-    const newRecord = {
-      id: Date.now().toString() + '_' + Math.random(),
-      rate: numRate,
-      hours: numHours
-    };
-
-    const updatedDayData = {
-      ...currentDayData,
-      records: [...(currentDayData.records || []), newRecord]
-    };
-
-    setWorkData({
-      ...workData,
-      [selectedDate]: updatedDayData
-    });
-
-    setRate('');
-    setHours('');
-  };
-
-  const handleDeleteRecord = (recordId) => {
-    const currentDayData = workData[selectedDate];
-    if (!currentDayData || !currentDayData.records) return;
-
-    const updatedRecords = currentDayData.records.filter(rec => rec.id !== recordId);
-    
-    setWorkData({
-      ...workData,
-      [selectedDate]: { ...currentDayData, records: updatedRecords }
-    });
-  };
-
-  const saveDayAndClose = async () => {
-    if (!selectedDate) return;
-    const viewYear = currentMonth.getFullYear();
-    const viewMonth = currentMonth.getMonth();
-    const dayDataToSave = workData[selectedDate] || { records: [] };
-
-    try {
-      if (dayDataToSave.records.length === 0) {
-        await fetch(`${FIREBASE_REST_URL}/tabulka_lists/${password}/${viewYear}_${viewMonth}/${selectedDate}.json`, {
-          method: 'DELETE'
-        });
-      } else {
-        await fetch(`${FIREBASE_REST_URL}/tabulka_lists/${password}/${viewYear}_${viewMonth}/${selectedDate}.json`, {
-          method: 'PUT',
-          body: JSON.stringify(dayDataToSave)
-        });
-      }
-      setModalVisible(false);
-      setSelectedDate(null);
-      fetchWorkData(password);
-    } catch (e) {
-      Alert.alert(t.networkErrorTitle, t.networkSendError);
-    }
-  };
-
-  const getDaysInMonth = (date) => {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const days = new Date(year, month + 1, 0).getDate();
-    return Array.from({ length: days }, (_, i) => {
-      const dayNum = i + 1;
-      return `${year}-${String(month + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
-    });
-  };
-
-  const calculateStatsForPeriod = (daysList) => {
-    let wDays = 0; 
-    let wkDays = 0; 
-    let tSum = 0;
-    
-    const today = new Date(); 
-    today.setHours(0, 0, 0, 0);
-    
-    const activeWorkDaysInMonth = daysList.filter(day => workData[day] && getDayTotal(workData[day]) > 0);
-    if (activeWorkDaysInMonth.length === 0) {
-      return { workDays: 0, weekendDays: 0, totalSum: 0 };
-    }
-    
-    const firstWorkDayNum = Math.min(...activeWorkDaysInMonth.map(d => parseInt(d.split('-')[2])));
-    let lastWorkDayNum = Math.max(...activeWorkDaysInMonth.map(d => parseInt(d.split('-')[2])));
-    
-    const sampleDay = daysList[0]; 
-    const [viewYear, viewMonth] = sampleDay.split('-').map(Number);
-    
-    if (viewYear === today.getFullYear() && (viewMonth - 1) === today.getMonth()) {
-      if (today.getDate() > lastWorkDayNum) {
-        lastWorkDayNum = today.getDate();
-      }
-    }
-    
-    daysList.forEach(day => {
-      const dayNum = parseInt(day.split('-')[2]);
-      const dayTotal = getDayTotal(workData[day]);
-      if (dayTotal > 0) { 
-        wDays++; 
-        tSum += dayTotal; 
-      } else { 
-        if (dayNum >= firstWorkDayNum && dayNum <= lastWorkDayNum) {
-          wkDays++; 
-        }
-      }
-    });
-    
-    return { workDays: wDays, weekendDays: wkDays, totalSum: tSum };
-  };
-
-  const stats = calculateStatsForPeriod(getDaysInMonth(currentMonth));
-
-  const getArchiveMonthsList = () => {
-    const list = [];
-    const today = new Date();
-    for (let i = 1; i <= 12; i++) {
-      const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
-      list.push({
-        year: d.getFullYear(),
-        month: d.getMonth(),
-        dateObject: d
-      });
-    }
-    return list;
-  };
-
-  const loadArchiveMonthData = (year, month) => {
-    setCurrentMonth(new Date(year, month, 1));
-    setArchiveModalVisible(false);
-  };
-
-  const handleGoToToday = () => {
-    const today = new Date();
-    setCurrentMonth(new Date(today.getFullYear(), today.getMonth(), 1));
-  };
-
-  const exportToPDF = async () => {
-    const days = getDaysInMonth(currentMonth);
-    const monthStr = currentMonth.toLocaleString(t.locale, { month: 'long', year: 'numeric' });
-    let tableRows = '';
-    
-    days.forEach(day => {
-      const data = workData[day];
-      const dayNum = day.split('-')[2];
-      const totalSum = getDayTotal(data);
-      const totalHours = getDayHours(data);
-
-      if (totalSum > 0) {
-        tableRows += `<tr><td>${dayNum}</td><td>${t.pdfStatusWork}</td><td>-</td><td>${totalHours}</td><td>${totalSum}</td></tr>`;
-      } else {
-        tableRows += `<tr><td>${dayNum}</td><td>${t.pdfStatusWeekend}</td><td>-</td><td>-</td><td>-</td></tr>`;
-      }
-    });
-
-    const formattedTitle = t.pdfTitle.replace('{month}', monthStr);
-    const htmlContent = `<html><head><style>body{font-family:'Helvetica';padding:20px;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ccc;padding:8px;text-align:center;}</style></head><body><h1>${formattedTitle}</h1><table><tr><th>${t.pdfColDay}</th><th>${t.pdfColStatus}</th><th>${t.pdfColRate}</th><th>${t.pdfColHours}</th><th>${t.pdfColSum}</th></tr>${tableRows}</table></body></html>`;
-    
-    try {
-      const { uri } = await Print.printToFileAsync({ html: htmlContent });
-      await Sharing.shareAsync(uri);
     } catch (error) {
-      Alert.alert(t.errorTitle, t.alertPdfError);
+      Alert.alert(t.alertError, t.alertReadError);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const renderCalendarGrid = () => {
-    const days = getDaysInMonth(currentMonth);
-    if (days.length === 0) return null;
+  // Создание нового пустого файла JSON
+  const handleCreateNewJson = () => {
+    setFileContent('{\n  "key": "value"\n}');
+    setFileName('new_file.json');
+    setFileType('json');
+    setFileUri(null);
+  };
 
-    const firstDayDate = new Date(days[0]);
-    let startOfWeekOffset = firstDayDate.getDay(); 
-    startOfWeekOffset = startOfWeekOffset === 0 ? 6 : startOfWeekOffset - 1;
+  // Создание нового пустого файла TXT
+  const handleCreateNewTxt = () => {
+    setFileContent('');
+    setFileName('new_file.txt');
+    setFileType('txt');
+    setFileUri(null);
+  };
 
-    const gridCells = [];
-    for (let i = 0; i < startOfWeekOffset; i++) {
-      gridCells.push(<View key={`empty-${i}`} style={styles.emptyCell} />);
+  // Сохранение изменений
+  const handleSaveFile = async () => {
+    // Если это JSON, базовая проверка синтаксиса перед сохранением
+    if (fileType === 'json') {
+      try {
+        JSON.parse(fileContent);
+      } catch (e) {
+        Alert.alert(t.alertError, t.alertInvalidJson);
+        return;
+      }
     }
 
-    days.forEach((dateStr) => {
-      const dayData = workData[dateStr];
-      const dayTotal = getDayTotal(dayData);
-      const isWorkDay = dayTotal > 0;
-      const dayNum = dateStr.split('-')[2];
+    setLoading(true);
+    try {
+      let targetUri = fileUri;
       
-      gridCells.push(
-        <TouchableOpacity 
-          key={dateStr} 
-          style={isWorkDay ? styles.workDayCell : styles.weekendCell} 
-          onPress={() => handleDayPress(dateStr)}
-        >
-          <Text style={isWorkDay ? styles.workDayText : styles.dayText}>
-            {parseInt(dayNum, 10)}
-          </Text>
-          {isWorkDay && (
-            <Text style={styles.cellSumSubtext}>{dayTotal}</Text>
-          )}
-        </TouchableOpacity>
-      );
-    });
+      // Если файл новый (еще не привязан к системе), создаем его в кэше Expo для возможности экспорта
+      if (!targetUri) {
+        targetUri = FileSystem.cacheDirectory + fileName;
+      }
 
-    const rows = [];
-    for (let i = 0; i < gridCells.length; i += 7) {
-      rows.push(
-        <View key={`row-${i}`} style={styles.calendarRow}>
-          {gridCells.slice(i, i + 7)}
-        </View>
-      );
+      await FileSystem.writeAsStringAsync(targetUri, fileContent, {
+        encoding: FileSystem.EncodingType.UTF8
+      });
+
+      setFileUri(targetUri);
+      Alert.alert(t.alertSuccess, t.alertSaved);
+    } catch (error) {
+      Alert.alert(t.alertError, t.alertSaveError);
+    } finally {
+      setLoading(false);
     }
-    return rows;
   };
 
-  if (isAuthChecking) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#0052CC" />
-      </View>
-    );
-  }
+  // Поделиться файлом (Share)
+  const handleShareFile = async () => {
+    try {
+      let targetUri = fileUri;
+      
+      // Если файл редактировался, но физически не сохранен на диске, принудительно пишем его в кэш
+      if (!targetUri || !fileUri) {
+        targetUri = FileSystem.cacheDirectory + fileName;
+        await FileSystem.writeAsStringAsync(targetUri, fileContent);
+        setFileUri(targetUri);
+      }
 
-  if (isTrialExpired) {
-    return (
-      <SafeAreaView style={styles.authContainer}>
-        <View style={styles.authCardExpired}>
-          <Text style={styles.authTitleExpired}>{t.trialExpiredTitle}</Text>
-          
-          <Text style={styles.authSubtitleBold}>{t.requestFullVersion}</Text>
-          <TextInput placeholder={t.placeholderName} style={styles.authInputMargin} value={clientName} onChangeText={setClientName} />
-          <TextInput placeholder={t.placeholderPhone} keyboardType="phone-pad" style={styles.authInputMarginLarge} value={clientPhone} onChangeText={setClientPhone} />
-          
-          <TouchableOpacity style={styles.authBtnSend} onPress={handleSendSupportRequest}>
-            <Text style={styles.authButtonText}>{t.btnSendRequest}</Text>
-          </TouchableOpacity>
-          
-          <View style={styles.noticeContainer}>
-            <Text style={styles.noticeSubText}>{t.noticeText}</Text>
-          </View>
-
-          <View style={styles.separator} />
-
-          <Text style={styles.authSubtitleBold}>{t.enterKeyTitle}</Text>
-          <TextInput
-            placeholder={t.placeholderKey}
-            autoCapitalize="characters"
-            style={styles.authInput}
-            value={inputPassword}
-            onChangeText={setInputPassword}
-          />
-          <TouchableOpacity style={styles.authBtnActivate} onPress={handleLogin}>
-            <Text style={styles.authButtonText}>{t.btnActivate}</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  const isCurrentModeTrial = password && password.startsWith("TRIAL_MODE_");
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(targetUri);
+      } else {
+        Alert.alert(t.alertError, t.alertShareError);
+      }
+    } catch (error) {
+      Alert.alert(t.alertError, t.alertShareError);
+    }
+  };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <View style={styles.headerTimeBlock}>
-            <Text style={styles.dateText}>{currentTime.toLocaleDateString(t.locale)}</Text>
-            <Text style={styles.timeText}>{currentTime.toLocaleTimeString(t.locale, { hour: '2-digit', minute: '2-digit' })}</Text>
-          </View>
-          
-          {isCurrentModeTrial ? (
-            <TouchableOpacity style={styles.requestHeaderButton} onPress={() => setRequestModalVisible(true)}>
-              <Text style={styles.requestHeaderButtonText}>{t.requestFullVersionHeader}</Text>
-            </TouchableOpacity>
-          ) : null}
-
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Text style={styles.logoutText}>{t.btnExit}</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.monthSelectorRow}>
-          <TouchableOpacity 
-            style={lang === 'ru' ? styles.langCircleRu : styles.langCircleRuDimmed} 
-            onPress={() => handleSelectLanguage('ru')}
-          >
-            <Text style={styles.langCircleText}>Р</Text>
-          </TouchableOpacity>
-
-          <View style={styles.monthTitleWrapper}>
-            <Text style={styles.monthTitle}>
-              {currentMonth.toLocaleString(t.locale, { month: 'long', year: 'numeric' }).toUpperCase()}
-            </Text>
-            <TouchableOpacity style={styles.todayButton} onPress={handleGoToToday}>
-              <Text style={styles.todayButtonText}>{t.btnToday.toUpperCase()}</Text>
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity 
-            style={lang === 'uk' ? styles.langCircleUk : styles.langCircleUkDimmed} 
-            onPress={() => handleSelectLanguage('uk')}
-          >
-            <Text style={styles.langCircleText}>У</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.weekDaysRow}>
-          {t.weekDays.map((day, index) => {
-            const isWeekend = day === 'Сб' || day === 'Вс' || day === 'Нд';
-            return (
-              <Text key={index} style={isWeekend ? styles.weekDayTextWeekend : styles.weekDayTextNormal}>
-                {day}
-              </Text>
-            );
-          })}
-        </View>
-
-        {isLoadingData ? (
-          <View style={styles.centerLoading}>
-            <ActivityIndicator size="large" color="#0052CC" />
-          </View>
-        ) : (
-          <ScrollView contentContainerStyle={styles.calendarGrid}>
-            {renderCalendarGrid()}
-          </ScrollView>
-        )}
-
-        <View style={styles.statsContainer}>
-          <Text style={styles.statsText}>{t.statsWorkDays}: {stats.workDays}</Text>
-          <Text style={styles.statsText}>{t.statsWeekendDays}: {stats.weekendDays}</Text>
-          <Text style={styles.totalText}>{t.statsTotalSum}: {stats.totalSum}</Text>
-        </View>
-
-        <TouchableOpacity style={styles.archiveButton} onPress={() => setArchiveModalVisible(true)}>
-          <Text style={styles.archiveButtonText}>{t.btnArchive}</Text>
+    <SafeAreaView style={styles.container}>
+      {/* Шапка */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>{t.title}</Text>
+        <TouchableOpacity style={styles.langButton} onPress={toggleLang}>
+          <Text style={styles.langButtonText}>{t.langBtn}</Text>
         </TouchableOpacity>
+      </View>
 
-        <TouchableOpacity style={styles.pdfButton} onPress={exportToPDF}>
-          <Text style={styles.pdfButtonText}>{t.btnSavePdf}</Text>
+      {/* Кнопки управления файлами */}
+      <View style={styles.topBar}>
+        <TouchableOpacity style={styles.btnAction} onPress={handleOpenFile}>
+          <Text style={styles.btnText}>{t.btnOpen}</Text>
         </TouchableOpacity>
+        <TouchableOpacity style={[styles.btnAction, styles.btnNew]} onPress={handleCreateNewJson}>
+          <Text style={styles.btnText}>{t.btnNewJson}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.btnAction, styles.btnNew]} onPress={handleCreateNewTxt}>
+          <Text style={styles.btnText}>{t.btnNewTxt}</Text>
+        </TouchableOpacity>
+      </View>
 
-        <Modal visible={langModalVisible} transparent={true} animationType="fade">
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContentLang}>
-              <TouchableOpacity style={styles.btnLangUk} onPress={() => handleSelectLanguage('uk')}>
-                <Text style={styles.authButtonText}>Оберіть мову (Укр)</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.btnLangRu} onPress={() => handleSelectLanguage('ru')}>
-                <Text style={styles.authButtonText}>Выберите язык (Рус)</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
+      {/* Статус-бар текущего файла */}
+      <View style={styles.statusContainer}>
+        <Text style={styles.statusText} numberOfLines={1}>
+          {fileName ? `${t.statusEditing}${fileName}` : t.statusEmpty}
+        </Text>
+      </View>
 
-        <Modal visible={requestModalVisible} transparent={true} animationType="slide">
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>{t.btnSendRequest}</Text>
-              <TextInput placeholder={t.placeholderName} style={styles.input} value={clientName} onChangeText={setClientName} />
-              <TextInput placeholder={t.placeholderPhone} keyboardType="phone-pad" style={styles.input} value={clientPhone} onChangeText={setClientPhone} />
-              
-              <View style={styles.modalButtons}>
-                <TouchableOpacity style={styles.btnRequestSave} onPress={handleSendSupportRequest}>
-                  <Text style={styles.btnText}>{t.btnSendRequest}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.btn, styles.btnCancel]} onPress={() => setRequestModalVisible(false)}>
-                  <Text style={styles.btnText}>{t.btnCancel}</Text>
-                </TouchableOpacity>
-              </View>
+      {/* Поле редактора */}
+      {loading ? (
+        <View style={styles.loaderContainer}>
+          <ActivityIndicator size="large" color="#0052CC" />
+        </View>
+      ) : (
+        <ScrollView style={styles.editorScroll} contentContainerStyle={{ flexGrow: 1 }}>
+          <TextInput
+            style={styles.editorInput}
+            multiline
+            textAlignVertical="top"
+            placeholder={t.placeholder}
+            value={fileContent}
+            onChangeText={setFileContent}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        </ScrollView>
+      )}
 
-              <View style={styles.noticeContainerMargin}>
-                <Text style={styles.noticeSubText}>{t.noticeText}</Text>
-              </View>
-            </View>
-          </View>
-        </Modal>
-
-        <Modal visible={archiveModalVisible} transparent={true} animationType="slide">
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>{t.btnArchive}</Text>
-              <ScrollView style={styles.archiveScroll}>
-                {getArchiveMonthsList().map((item, idx) => {
-                  const label = item.dateObject.toLocaleString(t.locale, { month: 'long', year: 'numeric' });
-                  return (
-                    <TouchableOpacity 
-                      key={idx} 
-                      style={styles.archiveItemRow}
-                      onPress={() => loadArchiveMonthData(item.year, item.month)}
-                    >
-                      <Text style={styles.archiveMonthNameText}>{label.toUpperCase()}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-              <TouchableOpacity style={styles.btnCloseArchive} onPress={() => setArchiveModalVisible(false)}>
-                <Text style={styles.btnText}>{t.btnClose}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
-
-        <Modal visible={modalVisible} transparent={true} animationType="fade">
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>{t.modalDayTitle}: {selectedDate ? selectedDate.split('-')[2] : ''}</Text>
-              
-              <Text style={styles.subSectionTitle}>{t.subSectionTitle}</Text>
-              <ScrollView style={styles.miniRecordsList}>
-                {workData[selectedDate]?.records && workData[selectedDate].records.length > 0 ? (
-                  workData[selectedDate].records.map((rec) => (
-                    <View key={rec.id} style={styles.miniRecordRow}>
-                      <Text style={styles.miniRecordText}>
-                        {rec.rate} × {rec.hours} {t.hourUnit} = {rec.rate * rec.hours}
-                      </Text>
-                      <TouchableOpacity onPress={() => handleDeleteRecord(rec.id)} style={styles.miniDeleteBtn}>
-                        <Text style={styles.miniDeleteBtnText}>🗑</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ))
-                ) : (
-                  <Text style={{ marginVertical: 10, color: 'gray' }}>{t.noRecordsText}</Text>
-                )}
-              </ScrollView>
-
-              <View style={{ height: 1, backgroundColor: '#eee', marginVertical: 10 }} />
-
-              <TextInput placeholder={t.placeholderRate} keyboardType="numeric" style={styles.input} value={rate} onChangeText={setRate} />
-              <TextInput placeholder={t.placeholderHours} keyboardType="numeric" style={styles.input} value={hours} onChangeText={setHours} />
-
-              <TouchableOpacity style={{ backgroundColor: '#0052CC', padding: 10, alignItems: 'center', marginBottom: 10 }} onPress={handleAddRecord}>
-                <Text style={{ color: '#fff', fontWeight: 'bold' }}>{t.btnAddRecord}</Text>
-              </TouchableOpacity>
-
-              <View style={styles.modalButtons}>
-                <TouchableOpacity style={[styles.btn, { backgroundColor: 'green' }]} onPress={saveDayAndClose}>
-                  <Text style={styles.btnText}>{t.btnSave}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.btn, styles.btnCancel]} onPress={() => { setModalVisible(false); setSelectedDate(null); fetchWorkData(password); }}>
-                  <Text style={styles.btnText}>{t.btnCancel}</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
+      {/* Нижние кнопки действий */}
+      <View style={styles.bottomBar}>
+        <TouchableOpacity 
+          style={[styles.btnBottom, styles.btnSaveColor, !fileName && styles.btnDisabled]} 
+          onPress={handleSaveFile}
+          disabled={!fileName}
+        >
+          <Text style={styles.btnText}>{t.btnSave}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.btnBottom, styles.btnShareColor, !fileName && styles.btnDisabled]} 
+          onPress={handleShareFile}
+          disabled={!fileName}
+        >
+          <Text style={styles.btnText}>{t.btnShare}</Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F5F7FA',
+    paddingTop: 10
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    backgroundColor: '#FFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E1E6EB'
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1A1F26'
+  },
+  langButton: {
+    backgroundColor: '#0052CC',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6
+  },
+  langButtonText: {
+    color: '#FFF',
+    fontWeight: '600',
+    fontSize: 14
+  },
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 10,
+    backgroundColor: '#FFF'
+  },
+  btnAction: {
+    flex: 1,
+    backgroundColor: '#0052CC',
+    paddingVertical: 10,
+    marginHorizontal: 4,
+    borderRadius: 6,
+    alignItems: 'center'
+  },
+  btnNew: {
+    backgroundColor: '#28A745'
+  },
+  btnText: {
+    color: '#FFF',
+    fontWeight: 'bold',
+    fontSize: 13
+  },
+  statusContainer: {
+    paddingHorizontal: 15,
+    paddingVertical: 6,
+    backgroundColor: '#E1E6EB'
+  },
+  statusText: {
+    fontSize: 13,
+    color: '#4A5568',
+    fontWeight: '500'
+  },
+  editorScroll: {
+    flex: 1,
+    backgroundColor: '#FFF',
+    margin: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderBottomColor: '#E1E6EB'
+  },
+  editorInput: {
+    flex: 1,
+    padding: 15,
+    fontFamily: 'monospace',
+    fontSize: 14,
+    color: '#1A1F26'
+  },
+  loaderContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  bottomBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 10,
+    backgroundColor: '#FFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E1E6EB'
+  },
+  btnBottom: {
+    flex: 1,
+    paddingVertical: 14,
+    marginHorizontal: 5,
+    borderRadius: 6,
+    alignItems: 'center'
+  },
+  btnSaveColor: {
+    backgroundColor: '#28A745'
+  },
+  btnShareColor: {
+    backgroundColor: '#17A2B8'
+  },
+  btnDisabled: {
+    backgroundColor: '#A0AEC0',
+    opacity: 0.6
+  }
+});
