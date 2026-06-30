@@ -1,0 +1,19 @@
+{
+  "name": "android-text-json-editor",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "android": "react-native run-android",
+    "start": "react-native start"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-native": "0.75.2"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.20.0",
+    "@babel/preset-env": "^7.20.0",
+    "@babel/runtime": "^7.20.0",
+    "metro-react-native-babel-preset": "^0.77.0"
+  }
+}
