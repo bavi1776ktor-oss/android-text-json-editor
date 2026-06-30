@@ -4,11 +4,14 @@ apply plugin: "com.facebook.react"
 
 android {
     namespace "com.keyseditor"
+    compileSdkVersion 34
     compileSdk 34
 
     defaultConfig {
         applicationId "com.keyseditor"
+        minSdkVersion 21
         minSdk 21
+        targetSdkVersion 34
         targetSdk 34
         versionCode 1
         versionName "1.0"
@@ -27,6 +30,7 @@ android {
         release {
             signingConfig signingConfigs.debug
             minifyEnabled false
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
         }
     }
 }
